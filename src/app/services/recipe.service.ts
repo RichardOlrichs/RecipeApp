@@ -3,11 +3,14 @@ import { Injectable } from '@angular/core';
 import { Recipe } from '../models/recipe.model';
 import { Ingredient } from '../models/ingredient.model';
 import { ShoppingListService } from './shopping-list.service';
+import { Subject } from 'rxjs';
 
 @Injectable({
   providedIn: 'root'
 })
 export class RecipeService {
+  recipesChanged = new Subject<Recipe[]>();
+
   recipes: Recipe[] = [
     new Recipe('Spareribs', 'Yummy spareribs.'
       , 'https://i0.wp.com/www.bbq-nl.com/wp-content/uploads/2018/12/easterwoodribs-2.jpg?resize=800%2C533&ssl=1',
@@ -35,5 +38,20 @@ export class RecipeService {
 
   addIngredientsToShoppingList(ings: Ingredient[]) {
     this.slService.addIngredients(ings);
+  }
+
+  addRecipe(recipe: Recipe) {
+    this.recipes.push(recipe);
+    this.recipesChanged.next(this.recipes.slice());
+  }
+
+  updateRecipe(index: number, recipe: Recipe) {
+    this.recipes[index] = recipe;
+    this.recipesChanged.next(this.recipes.slice());
+  }
+
+  deleteRecipe(index: number) {
+    this.recipes.splice(index, 1);
+    this.recipesChanged.next(this.recipes.slice());
   }
 }
