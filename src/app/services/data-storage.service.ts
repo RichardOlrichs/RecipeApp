@@ -1,8 +1,9 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { RecipeService } from './recipe.service';
 import { Recipe } from '../models/recipe.model';
-import { map, tap } from 'rxjs/operators';
+import { map, tap, take, exhaustMap } from 'rxjs/operators';
+import { AuthService } from './auth.service';
 
 @Injectable({
   providedIn: 'root'
@@ -10,7 +11,7 @@ import { map, tap } from 'rxjs/operators';
 export class DataStorageService {
   fbUrl = 'https://recipeappbackend-5f297.firebaseio.com';
 
-  constructor(private http: HttpClient, private rs: RecipeService) { }
+  constructor(private http: HttpClient, private rs: RecipeService, private authService: AuthService) { }
 
   storeRecipes() {
     const recipes = this.rs.getRecipes();
@@ -25,19 +26,27 @@ export class DataStorageService {
   }
 
   fetchRecipes() {
-    return this.http.get<Recipe[]>(`${this.fbUrl}/recipes.json`)
-      .pipe(
-        map(recipes => {
-          return recipes.map(recipe => {
-            return {
-              ...recipe,
-              ingredients: recipe.ingredients ? recipe.ingredients : []
-            };
-          });
-        }),
-        tap((recipes) => {
-          this.rs.setRecipes(recipes);
-        })
-      );
+    return this.authService.user.pipe(
+      take(1),
+      exhaustMap(user => {
+        return this.http.get<Recipe[]>(
+          `${this.fbUrl}/recipes.json`,
+          {
+            params: new HttpParams().set('auth', user.token)
+          }
+        );
+      }),
+      map(recipes => {
+        return recipes.map(recipe => {
+          return {
+            ...recipe,
+            ingredients: recipe.ingredients ? recipe.ingredients : []
+          };
+        });
+      }),
+      tap((recipes) => {
+        this.rs.setRecipes(recipes);
+      })
+    );
   }
 }
