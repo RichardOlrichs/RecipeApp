@@ -3,6 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { catchError, tap } from 'rxjs/operators';
 import { throwError, BehaviorSubject } from 'rxjs';
 import { User } from '../auth/user.model';
+import { Router } from '@angular/router';
 
 export interface AuthResponseData {
   kind: string;
@@ -23,8 +24,9 @@ export class AuthService {
   loginUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${this.apikey}`;
 
   user = new BehaviorSubject<User>(null);
+  private tokenExpTimer: any;
 
-  constructor(private http: HttpClient) { }
+  constructor(private http: HttpClient, private router: Router) { }
 
   signup(email: string, password: string) {
     return this.http.post<AuthResponseData>(this.signupUrl, {
@@ -54,10 +56,42 @@ export class AuthService {
       );
   }
 
+  autoLogin() {
+    const userData = localStorage.getItem('userData');
+    if (!userData) {
+      return;
+    }
+    const udj: { email: string; id: string; _token: string; _tokenExpDate: string; } = JSON.parse(userData);
+    const loadedUser = new User(udj.email, udj.id, udj._token, new Date(udj._tokenExpDate));
+    if (loadedUser.token) {
+      this.user.next(loadedUser);
+      const expDur = new Date (udj._tokenExpDate).getTime() - new Date().getTime();
+      this.autoLogout(expDur);
+    }
+  }
+
+  logout() {
+    this.user.next(null);
+    this.router.navigate(['/auth']);
+    localStorage.removeItem('userData');
+    if (this.tokenExpTimer) {
+      clearTimeout(this.tokenExpTimer);
+    }
+    this.tokenExpTimer = null;
+  }
+
+  autoLogout(expirationDuration: number) {
+    this.tokenExpTimer = setTimeout(() => {
+      this.logout();
+    } , expirationDuration);
+  }
+
   private handleAuthentication(email: string, userId: string, token: string, expiresIn: number) {
     const expDate = new Date(new Date().getTime() + (expiresIn * 1000));
     const user = new User(email, userId, token, expDate);
     this.user.next(user);
+    this.autoLogout(expiresIn * 1000);
+    localStorage.setItem('userData', JSON.stringify(user));
   }
 
   private handleError(errorRes: HttpErrorResponse) {
